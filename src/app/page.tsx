@@ -251,42 +251,142 @@ export default function HomePage() {
         ) : null}
 
         {step === 4 && report ? (
-          <div className="stack">
-            <div style={{ maxWidth: "520px" }}>
-              <Radar
-                data={{
-                  labels: Object.values(metricLabels),
-                  datasets: [
-                    {
-                      label: "선수 역량",
-                      data: (Object.keys(metricLabels) as (keyof PlayerMetrics)[]).map(
-                        (key) => report.scores[key]
-                      ),
-                      borderColor: "#2563eb",
-                      backgroundColor: "rgba(37, 99, 235, 0.2)",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
-                }}
-              />
-            </div>
-            <p>종합 점수: {report.overallScore}</p>
-            <p>종합 평가: {report.overallEvaluation}</p>
-            {(Object.keys(metricLabels) as (keyof PlayerMetrics)[]).map((key) => (
-              <span key={key}>
-                {metricLabels[key]}: {metrics[key]}점 / {report.grades[key]}등급
-              </span>
-            ))}
-            <button type="button" className="secondary" onClick={() => setStep(3)}>
-              이전
-            </button>
-            <button type="button" onClick={() => setStep(5)}>
-              다음: 저장
-            </button>
-          </div>
+          (() => {
+            const gradeColor: Record<string, string> = {
+              엘리트: "#FFD700",
+              우수: "#22C55E",
+              평균이상: "#3B82F6",
+              평균이하: "#F97316",
+              기초: "#EF4444",
+            };
+
+            const gradeKeys = Object.keys(metricLabels) as (keyof PlayerMetrics)[];
+            const overallGrade = report.overallEvaluation.split(" ")[0] ?? "기초";
+            const overallBg = gradeColor[overallGrade] ?? "#94a3b8";
+
+            return (
+              <div className="stack">
+                {/* 1) 선수 프로필 카드 */}
+                <section className="card" style={{ padding: "1rem" }}>
+                  <div style={{ fontWeight: 1000, color: "#0f172a" }}>
+                    {form.name} / {form.age} / {form.position} / {form.team}
+                  </div>
+                </section>
+
+                {/* 2) 종합 등급 크게 표시 */}
+                <section className="card" style={{ padding: "1rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ fontSize: 44, fontWeight: 1000, letterSpacing: "-0.04em", color: "#0f172a" }}>
+                      {report.overallScore}
+                    </div>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "0.35rem 0.7rem",
+                        borderRadius: 999,
+                        background: overallBg,
+                        color: "#0b1220",
+                        fontWeight: 1000,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {overallGrade}
+                    </span>
+                  </div>
+                </section>
+
+                {/* 3) 레이더차트 maxWidth 700px */}
+                <section className="card" style={{ padding: "1rem" }}>
+                  <div style={{ maxWidth: 700, width: "100%", margin: "0 auto", height: 420 }}>
+                    <Radar
+                      data={{
+                        labels: Object.values(metricLabels),
+                        datasets: [
+                          {
+                            label: "선수 역량",
+                            data: gradeKeys.map((key) => report.scores[key]),
+                            borderColor: "#2563eb",
+                            backgroundColor: "rgba(37, 99, 235, 0.22)",
+                            borderWidth: 2,
+                          },
+                        ],
+                      }}
+                      options={{
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
+                      }}
+                    />
+                  </div>
+                </section>
+
+                {/* 4) 9개 항목 카드형 2열 그리드 */}
+                <section className="card" style={{ padding: "1rem" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gap: 12,
+                    }}
+                  >
+                    {gradeKeys.map((key) => {
+                      const grade = report.grades[key];
+                      const badgeBg = gradeColor[grade] ?? "#94a3b8";
+                      return (
+                        <div
+                          key={key}
+                          style={{
+                            borderRadius: 14,
+                            padding: "0.95rem",
+                            border: "1px solid rgba(219, 227, 239, 1)",
+                            background: "white",
+                          }}
+                        >
+                          <div style={{ fontWeight: 1000, color: "#0f172a" }}>{metricLabels[key]}</div>
+                          <div style={{ marginTop: 8, fontWeight: 1000, color: "#0f172a", fontSize: 20 }}>
+                            {metrics[key]}
+                          </div>
+                          <div style={{ marginTop: 10 }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "0.25rem 0.55rem",
+                                borderRadius: 999,
+                                background: badgeBg,
+                                color: "#0b1220",
+                                fontWeight: 1000,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {grade}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* 이전/다음 버튼 유지 */}
+                <button type="button" className="secondary" onClick={() => setStep(3)}>
+                  이전
+                </button>
+                <button type="button" onClick={() => setStep(5)}>
+                  다음: 저장
+                </button>
+              </div>
+            );
+          })()
         ) : null}
 
         {step === 5 && report ? (
