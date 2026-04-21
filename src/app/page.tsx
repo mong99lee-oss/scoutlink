@@ -1,7 +1,16 @@
 "use client"
 
-import { useState } from "react"
-import { User, Ruler, Zap, Target, Timer, Activity } from "lucide-react"
+import { useMemo, useState } from "react"
+import { User, Ruler, Zap, Target, Timer, Activity, Check, Link2 } from "lucide-react"
+import { PlayerProfileCard } from "@/components/scouting/player-profile-card"
+import { OverallGrade } from "@/components/scouting/overall-grade"
+import { RadarChart } from "@/components/scouting/radar-chart"
+import { StatCardGrid } from "@/components/scouting/stat-card-grid"
+import { CommentSection } from "@/components/scouting/comment-section"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { buildReport, getBenchmarks, getGrade, type MetricKey, type PlayerMetrics } from "@/lib/report"
+import { createPlayer } from "@/lib/supabase"
 
 interface PlayerData {
   name: string
@@ -13,13 +22,32 @@ interface PlayerData {
 interface MeasurementData {
   sprint10m: string
   sprint30m: string
-  standingJump: string
+  standingLongJump: string
   sideStep: string
   pushUp: string
   sitAndReach: string
-  powerDribble: string
+  powerDribble10m: string
   passingAccuracy: string
   blazePodReaction: string
+}
+
+type Grade = "엘리트" | "우수" | "평균이상" | "평균이하" | "기초"
+
+type MetricRange = {
+  min: number
+  max: number
+}
+
+const metricRanges: Record<MetricKey, MetricRange> = {
+  sprint10m: { min: 1.5, max: 3.0 },
+  sprint30m: { min: 3.5, max: 6.5 },
+  standingLongJump: { min: 80, max: 280 },
+  sideStep: { min: 10, max: 60 },
+  pushUp: { min: 5, max: 80 },
+  sitAndReach: { min: -20, max: 30 },
+  powerDribble10m: { min: 2.0, max: 6.0 },
+  passingAccuracy: { min: 0, max: 45 },
+  blazePodReaction: { min: 200, max: 800 },
 }
 
 const measurementFields = [
@@ -40,7 +68,7 @@ const measurementFields = [
     placeholder: "5.2",
   },
   {
-    key: "standingJump",
+    key: "standingLongJump",
     label: "제자리멀리뛰기",
     unit: "cm",
     icon: Ruler,
@@ -72,12 +100,12 @@ const measurementFields = [
     placeholder: "12",
   },
   {
-    key: "powerDribble",
+    key: "powerDribble10m",
     label: "파워드리블",
     unit: "초",
     icon: Timer,
     range: "2.0 ~ 6.0",
-    placeholder: "11.5",
+    placeholder: "3.2",
   },
   {
     key: "passingAccuracy",
@@ -95,7 +123,18 @@ const measurementFields = [
     range: "200 ~ 800",
     placeholder: "450",
   },
-]
+] as const
+
+const getMetricErrorMessage = (key: MetricKey, value: string) => {
+  if (!value.trim()) return ""
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return "숫자로 입력해 주세요."
+  const range = metricRanges[key]
+  if (parsed < range.min || parsed > range.max) {
+    return `${range.min}~${range.max} 범위로 입력해 주세요.`
+  }
+  return ""
+}
 
 export default function ScoutingForm() {
   const [playerData, setPlayerData] = useState<PlayerData>({
@@ -108,14 +147,39 @@ export default function ScoutingForm() {
   const [measurements, setMeasurements] = useState<MeasurementData>({
     sprint10m: "",
     sprint30m: "",
-    standingJump: "",
+    standingLongJump: "",
     sideStep: "",
     pushUp: "",
     sitAndReach: "",
-    powerDribble: "",
+    powerDribble10m: "",
     passingAccuracy: "",
     blazePodReaction: "",
   })
+  const [metricErrors, setMetricErrors] = useState<Record<MetricKey, string>>({
+    sprint10m: "",
+    sprint30m: "",
+    standingLongJump: "",
+    sideStep: "",
+    pushUp: "",
+    sitAndReach: "",
+    powerDribble10m: "",
+    passingAccuracy: "",
+    blazePodReaction: "",
+  })
+  const [submitError, setSubmitError] = useState("")
+  const [reportData, setReportData] = useState<{
+    playerName: string
+    age: number
+    position: "FW" | "MF" | "DF"
+    team: string
+    measurementDate: string
+    report: ReturnType<typeof buildReport>
+    metrics: PlayerMetrics
+    benchmarks: PlayerMetrics
+    savedId: string
+  } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handlePlayerChange = (field: keyof PlayerData, value: string) => {
     setPlayerData((prev) => ({ ...prev, [field]: value }))
@@ -123,14 +187,124 @@ export default function ScoutingForm() {
 
   const handleMeasurementChange = (field: keyof MeasurementData, value: string) => {
     setMeasurements((prev) => ({ ...prev, [field]: value }))
+    const metricKey = field as MetricKey
+    setMetricErrors((prev) => ({ ...prev, [metricKey]: getMetricErrorMessage(metricKey, value) }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Player Data:", playerData)
-    console.log("Measurements:", measurements)
-    alert("리포트가 생성되었습니다!")
+    if (isSubmitting) return
+
+    setSubmitError("")
+    setCopied(false)
+
+    if (!playerData.name.trim() || !playerData.age.trim() || !playerData.team.trim() || !playerData.position) {
+      setSubmitError("선수 정보를 모두 입력해 주세요.")
+      return
+    }
+
+    const age = Number(playerData.age)
+    if (!Number.isFinite(age) || age < 10 || age > 18) {
+      setSubmitError("나이는 10~18 사이로 입력해 주세요.")
+      return
+    }
+
+    if (playerData.position !== "FW" && playerData.position !== "MF" && playerData.position !== "DF") {
+      setSubmitError("포지션은 FW / MF / DF 중에서 선택해 주세요.")
+      return
+    }
+
+    const nextErrors = { ...metricErrors }
+    const parsedMetrics = {} as PlayerMetrics
+    for (const key of Object.keys(metricRanges) as MetricKey[]) {
+      const value = measurements[key]
+      const error = getMetricErrorMessage(key, value)
+      nextErrors[key] = error
+      if (error) continue
+      if (!value.trim()) {
+        nextErrors[key] = "값을 입력해 주세요."
+        continue
+      }
+      parsedMetrics[key] = Number(value)
+    }
+    setMetricErrors(nextErrors)
+    if (Object.values(nextErrors).some(Boolean)) {
+      setSubmitError("입력값을 확인해 주세요.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const report = buildReport(parsedMetrics, age, playerData.position)
+      const savedId = crypto.randomUUID()
+      await createPlayer({
+        id: savedId,
+        name: playerData.name.trim(),
+        age,
+        position: playerData.position,
+        team: playerData.team.trim(),
+        note: null,
+        metrics: parsedMetrics,
+        report,
+      })
+      const benchmarks = getBenchmarks(playerData.position, age)
+      setReportData({
+        playerName: playerData.name.trim(),
+        age,
+        position: playerData.position,
+        team: playerData.team.trim(),
+        measurementDate: new Date().toLocaleDateString("ko-KR").replace(/\.\s?/g, "."),
+        report,
+        metrics: parsedMetrics,
+        benchmarks,
+        savedId,
+      })
+      alert("리포트 생성완료!")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다."
+      setSubmitError(`저장 실패: ${message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  const shareUrl = useMemo(() => {
+    if (!reportData || typeof window === "undefined") return ""
+    return `${window.location.origin}/share/${reportData.savedId}`
+  }, [reportData])
+
+  const handleCopyShare = async () => {
+    if (!shareUrl) return
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setSubmitError("공유 링크 복사에 실패했습니다.")
+    }
+  }
+
+  const stats = useMemo(() => {
+    if (!reportData) return []
+    const rows: Array<{ key: MetricKey; label: string; unit: string }> = [
+      { key: "sprint10m", label: "10m스프린트", unit: "초" },
+      { key: "sprint30m", label: "30m스프린트", unit: "초" },
+      { key: "standingLongJump", label: "제자리멀리뛰기", unit: "cm" },
+      { key: "sideStep", label: "사이드스텝", unit: "회" },
+      { key: "pushUp", label: "팔굽혀펴기", unit: "회" },
+      { key: "sitAndReach", label: "장좌체전굴", unit: "cm" },
+      { key: "powerDribble10m", label: "파워드리블", unit: "초" },
+      { key: "passingAccuracy", label: "패싱정확도", unit: "개/45초" },
+      { key: "blazePodReaction", label: "BlazePod반응속도", unit: "ms" },
+    ]
+    return rows.map((row) => ({
+      name: row.label,
+      value: `${reportData.metrics[row.key]}${row.unit}`,
+      score: reportData.report.scores[row.key],
+      grade: reportData.report.grades[row.key] as Grade,
+      benchmark: `${reportData.benchmarks[row.key]}${row.unit}`,
+    }))
+  }, [reportData])
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -218,7 +392,6 @@ export default function ScoutingForm() {
                   <option value="FW">FW (공격수)</option>
                   <option value="MF">MF (미드필더)</option>
                   <option value="DF">DF (수비수)</option>
-                  <option value="GK">GK (골키퍼)</option>
                 </select>
               </div>
             </div>
@@ -271,6 +444,11 @@ export default function ScoutingForm() {
                     <p className="mt-2 text-xs text-gray-400">
                       권장 범위: <span className="text-emerald-600 font-medium">{field.range}</span>
                     </p>
+                    {metricErrors[field.key as MetricKey] ? (
+                      <p className="mt-1 text-xs font-medium text-red-600">
+                        {metricErrors[field.key as MetricKey]}
+                      </p>
+                    ) : null}
                   </div>
                 )
               })}
@@ -280,6 +458,7 @@ export default function ScoutingForm() {
           {/* Submit Button */}
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold rounded-2xl shadow-lg shadow-emerald-600/30 transition-all duration-200 flex items-center justify-center gap-2"
           >
             <svg
@@ -295,9 +474,49 @@ export default function ScoutingForm() {
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            리포트 생성
+            {isSubmitting ? "생성 중..." : "리포트 생성"}
           </button>
         </form>
+
+        {submitError ? (
+          <Card className="mt-4 border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+            {submitError}
+          </Card>
+        ) : null}
+
+        {reportData ? (
+          <div className="mt-6 space-y-4">
+            <PlayerProfileCard
+              name={reportData.playerName}
+              age={reportData.age}
+              position={reportData.position}
+              team={reportData.team}
+              measurementDate={reportData.measurementDate}
+            />
+            <OverallGrade grade={getGrade(reportData.report.overallScore) as Grade} score={reportData.report.overallScore} />
+            <RadarChart stats={stats} />
+            <StatCardGrid stats={stats} />
+            <CommentSection comment={reportData.report.overallEvaluation} />
+
+            <Button
+              onClick={handleCopyShare}
+              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"
+              size="lg"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-5 w-5" />
+                  링크가 복사되었습니다!
+                </>
+              ) : (
+                <>
+                  <Link2 className="h-5 w-5" />
+                  공유 링크 복사
+                </>
+              )}
+            </Button>
+          </div>
+        ) : null}
 
         {/* Footer */}
         <p className="text-center text-xs text-gray-400 mt-6">
