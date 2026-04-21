@@ -27,8 +27,8 @@ export const metricLabels: Record<MetricKey, string> = {
   pushUp: "팔굽혀펴기 (회/1분)",
   sitAndReach: "장좌체전굴 (cm)",
   powerDribble10m: "파워드리블 10m (초)",
-  passingAccuracy: "패싱 정확도 (개/45초)",
-  blazePodReaction: "BlazePod 반응속도 (ms)",
+  passingAccuracy: "패싱정확도 (개/45초)",
+  blazePodReaction: "BlazePod반응속도 (ms)",
 };
 
 type MetricRule = {
@@ -195,7 +195,7 @@ const metricName: Record<MetricKey, string> = {
   sitAndReach: "장좌체전굴",
   powerDribble10m: "파워드리블",
   passingAccuracy: "패싱정확도",
-  blazePodReaction: "BlazePod 반응속도",
+  blazePodReaction: "BlazePod반응속도",
 };
 
 const trainingTip: Record<MetricKey, string> = {
