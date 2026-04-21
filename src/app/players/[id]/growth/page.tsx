@@ -66,6 +66,12 @@ const normalizeMetricToRadar = (key: MetricKey, value: number | undefined, lower
   return Number(score.toFixed(1));
 };
 
+const formatMetricDetail = (value: number | undefined, unit: string) => {
+  if (value === undefined || !Number.isFinite(value)) return "-";
+  if (unit === "초") return `${value.toFixed(2)}${unit}`;
+  return `${Math.round(value)}${unit}`;
+};
+
 export default function PlayerGrowthPage({ params }: GrowthPageProps) {
   const [history, setHistory] = useState<PlayerRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +116,59 @@ export default function PlayerGrowthPage({ params }: GrowthPageProps) {
       current: normalizeMetricToRadar(row.key, current.metrics?.[row.key], row.lowerIsBetter),
       fullMark: 100,
     }));
+  }, [current, previous]);
+
+  const growthCommentary = useMemo(() => {
+    if (!current?.metrics || !previous?.metrics || !current.report || !previous.report) {
+      return {
+        improved: [] as string[],
+        declined: [] as string[],
+        overallSummary: "",
+      };
+    }
+
+    const analyses = metricRows.map((row) => {
+      const prevValue = previous.metrics?.[row.key];
+      const currValue = current.metrics?.[row.key];
+      const rawDelta = (currValue ?? 0) - (prevValue ?? 0);
+      const performanceDelta = row.lowerIsBetter ? -rawDelta : rawDelta;
+      return {
+        row,
+        prevValue,
+        currValue,
+        performanceDelta,
+      };
+    });
+
+    const improved = analyses
+      .filter((item) => item.performanceDelta > 0)
+      .sort((a, b) => b.performanceDelta - a.performanceDelta)
+      .slice(0, 2)
+      .map(
+        (item) =>
+          `${item.row.label}이 ${formatMetricDetail(item.prevValue, item.row.unit)} → ${formatMetricDetail(item.currValue, item.row.unit)}로 크게 향상됐습니다 ▲`
+      );
+
+    const declined = analyses
+      .filter((item) => item.performanceDelta < 0)
+      .sort((a, b) => a.performanceDelta - b.performanceDelta)
+      .slice(0, 2)
+      .map(
+        (item) =>
+          `${item.row.label}이 ${formatMetricDetail(item.prevValue, item.row.unit)} → ${formatMetricDetail(item.currValue, item.row.unit)}로 하락했습니다 ▼`
+      );
+
+    const prevOverall = previous.report.overallScore;
+    const currOverall = current.report.overallScore;
+    const diff = currOverall - prevOverall;
+    const overallSummary =
+      diff > 0
+        ? `종합점수가 ${prevOverall}점 → ${currOverall}점으로 ${diff}점 향상됐습니다`
+        : diff < 0
+          ? `종합점수가 ${prevOverall}점 → ${currOverall}점으로 ${Math.abs(diff)}점 하락했습니다`
+          : `종합점수가 ${prevOverall}점 → ${currOverall}점으로 동일합니다`;
+
+    return { improved, declined, overallSummary };
   }, [current, previous]);
 
   if (loading) {
@@ -243,6 +302,33 @@ export default function PlayerGrowthPage({ params }: GrowthPageProps) {
                 <Radar name="현재" dataKey="current" stroke="#10b981" fill="#10b981" fillOpacity={0.22} strokeWidth={2} />
               </RadarChart>
             </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="bg-white p-5">
+          <h2 className="mb-4 text-lg font-bold text-slate-800">성장 분석 코멘트</h2>
+          <div className="space-y-2">
+            {growthCommentary.improved.length > 0 ? (
+              growthCommentary.improved.map((comment) => (
+                <p key={comment} className="text-sm font-medium text-emerald-700">
+                  {comment}
+                </p>
+              ))
+            ) : (
+              <p className="text-sm font-medium text-slate-500">유의미하게 향상된 항목은 아직 없습니다.</p>
+            )}
+
+            {growthCommentary.declined.length > 0 ? (
+              growthCommentary.declined.map((comment) => (
+                <p key={comment} className="text-sm font-medium text-rose-700">
+                  {comment}
+                </p>
+              ))
+            ) : (
+              <p className="text-sm font-medium text-slate-500">하락한 항목은 없습니다.</p>
+            )}
+
+            <p className="pt-1 text-sm font-bold text-slate-700">{growthCommentary.overallSummary}</p>
           </div>
         </Card>
       </div>
