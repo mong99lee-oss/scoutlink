@@ -26,6 +26,8 @@ export default function PlayersPage() {
   const [players, setPlayers] = useState<PlayerRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [positionFilter, setPositionFilter] = useState<"ALL" | "FW" | "MF" | "DF">("ALL");
+  const [ageFilter, setAgeFilter] = useState<"ALL" | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18>("ALL");
 
   useEffect(() => {
     const loadPlayers = async () => {
@@ -43,6 +45,12 @@ export default function PlayersPage() {
 
     void loadPlayers();
   }, []);
+
+  const filteredPlayers = players.filter((player) => {
+    const positionMatched = positionFilter === "ALL" || player.position === positionFilter;
+    const ageMatched = ageFilter === "ALL" || player.age === ageFilter;
+    return positionMatched && ageMatched;
+  });
 
   return (
     <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
@@ -67,14 +75,66 @@ export default function PlayersPage() {
           </Card>
         ) : null}
 
+        {!loading && !errorMessage ? (
+          <Card className="bg-white p-4">
+            <div className="space-y-3">
+              <div>
+                <p className="mb-2 text-xs font-bold text-slate-500">포지션</p>
+                <div className="flex flex-wrap gap-2">
+                  {(["ALL", "FW", "MF", "DF"] as const).map((position) => (
+                    <button
+                      key={position}
+                      type="button"
+                      onClick={() => setPositionFilter(position)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                        positionFilter === position
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                          : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {position === "ALL" ? "전체" : position}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-bold text-slate-500">나이</p>
+                <div className="flex flex-wrap gap-2">
+                  {(["ALL", 10, 11, 12, 13, 14, 15, 16, 17, 18] as const).map((age) => (
+                    <button
+                      key={String(age)}
+                      type="button"
+                      onClick={() => setAgeFilter(age)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                        ageFilter === age
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                          : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {age === "ALL" ? "전체" : `${age}세`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
         {!loading && !errorMessage && players.length === 0 ? (
           <Card className="bg-white p-5 text-sm font-medium text-slate-500">
             저장된 선수가 없습니다. 먼저 리포트를 생성해 주세요.
           </Card>
         ) : null}
 
+        {!loading && !errorMessage && players.length > 0 && filteredPlayers.length === 0 ? (
+          <Card className="bg-white p-5 text-sm font-medium text-slate-500">
+            해당 조건의 선수가 없습니다.
+          </Card>
+        ) : null}
+
         {!loading && !errorMessage
-          ? players.map((player) => {
+          ? filteredPlayers.map((player) => {
               const overallScore = player.report?.overallScore ?? 0;
               const overallGrade = getGrade(overallScore);
               return (
