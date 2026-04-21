@@ -87,13 +87,13 @@ export default function SharePage({ params }: SharePageProps) {
         await document.fonts.ready;
       }
 
-      target.style.width = "390px";
-      target.style.minWidth = "390px";
-      target.style.maxWidth = "390px";
+      target.style.width = "500px";
+      target.style.minWidth = "500px";
+      target.style.maxWidth = "500px";
 
       const canvas = await html2canvas(target, {
-        width: 390,
-        windowWidth: 390,
+        width: 500,
+        windowWidth: 500,
         scale: 2,
         useCORS: true,
         backgroundColor: "#f8fafc",

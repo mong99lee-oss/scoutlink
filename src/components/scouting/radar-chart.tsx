@@ -34,9 +34,9 @@ export function RadarChart({ stats }: RadarChartProps) {
   return (
     <Card className="bg-white p-4">
       <h2 className="mb-2 text-center text-lg font-bold text-slate-800">능력치 분석</h2>
-      <div className="h-[420px] w-full">
+      <div className="h-[420px] w-full overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
-          <RechartsRadarChart data={chartData} margin={{ top: 40, right: 80, bottom: 40, left: 80 }}>
+          <RechartsRadarChart data={chartData} margin={{ top: 28, right: 24, bottom: 28, left: 24 }}>
             <PolarGrid stroke="#e2e8f0" />
             <PolarAngleAxis
               dataKey="subject"
