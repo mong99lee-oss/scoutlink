@@ -78,41 +78,42 @@ export default function SharePage({ params }: SharePageProps) {
     if (!reportRef.current || isSavingPdf || !player) return;
 
     setIsSavingPdf(true);
+    const target = reportRef.current;
+    const prevWidth = target.style.width;
+    const prevMinWidth = target.style.minWidth;
+    const prevMaxWidth = target.style.maxWidth;
     try {
       if (typeof document !== "undefined" && "fonts" in document) {
         await document.fonts.ready;
       }
 
-      const canvas = await html2canvas(reportRef.current, {
+      target.style.width = "390px";
+      target.style.minWidth = "390px";
+      target.style.maxWidth = "390px";
+
+      const canvas = await html2canvas(target, {
+        width: 390,
+        windowWidth: 390,
         scale: 2,
         useCORS: true,
         backgroundColor: "#f8fafc",
       });
 
       const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
+      const pxToMm = 0.264583;
+      const pdfWidth = canvas.width * pxToMm;
+      const pdfHeight = canvas.height * pxToMm;
+      const orientation = pdfWidth >= pdfHeight ? "l" : "p";
+      const pdf = new jsPDF({ orientation, unit: "mm", format: [pdfWidth, pdfHeight] });
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
 
       pdf.save(`scouting-report-${player.name}.pdf`);
     } catch (err) {
       console.error("Failed to save PDF:", err);
     } finally {
+      target.style.width = prevWidth;
+      target.style.minWidth = prevMinWidth;
+      target.style.maxWidth = prevMaxWidth;
       setIsSavingPdf(false);
     }
   };
