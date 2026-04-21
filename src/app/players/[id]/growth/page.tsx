@@ -39,10 +39,31 @@ const metricRows: Array<{ key: MetricKey; label: string; unit: string; lowerIsBe
   { key: "blazePodReaction", label: "BlazePod반응속도", unit: "ms", lowerIsBetter: true },
 ];
 
+const metricRanges: Record<MetricKey, { min: number; max: number }> = {
+  sprint10m: { min: 1.5, max: 3.0 },
+  sprint30m: { min: 3.5, max: 6.5 },
+  standingLongJump: { min: 80, max: 280 },
+  sideStep: { min: 10, max: 60 },
+  pushUp: { min: 5, max: 80 },
+  sitAndReach: { min: -20, max: 30 },
+  powerDribble10m: { min: 2.0, max: 6.0 },
+  passingAccuracy: { min: 0, max: 45 },
+  blazePodReaction: { min: 200, max: 800 },
+};
+
 const formatMetric = (value: number | undefined, unit: string) => {
   if (value === undefined || !Number.isFinite(value)) return "-";
   if (unit === "초") return `${value.toFixed(2)}${unit}`;
   return `${Math.round(value)}${unit}`;
+};
+
+const normalizeMetricToRadar = (key: MetricKey, value: number | undefined, lowerIsBetter: boolean) => {
+  if (value === undefined || !Number.isFinite(value)) return 0;
+  const range = metricRanges[key];
+  const clamped = Math.max(range.min, Math.min(range.max, value));
+  const ratio = (clamped - range.min) / (range.max - range.min);
+  const score = lowerIsBetter ? (1 - ratio) * 100 : ratio * 100;
+  return Number(score.toFixed(1));
 };
 
 export default function PlayerGrowthPage({ params }: GrowthPageProps) {
@@ -82,11 +103,11 @@ export default function PlayerGrowthPage({ params }: GrowthPageProps) {
   );
 
   const radarData = useMemo(() => {
-    if (!current?.report || !previous?.report) return [];
+    if (!current?.metrics || !previous?.metrics) return [];
     return metricRows.map((row) => ({
       subject: row.label,
-      previous: previous.report?.scores[row.key] ?? 0,
-      current: current.report?.scores[row.key] ?? 0,
+      previous: normalizeMetricToRadar(row.key, previous.metrics?.[row.key], row.lowerIsBetter),
+      current: normalizeMetricToRadar(row.key, current.metrics?.[row.key], row.lowerIsBetter),
       fullMark: 100,
     }));
   }, [current, previous]);
