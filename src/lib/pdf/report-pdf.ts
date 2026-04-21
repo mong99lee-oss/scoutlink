@@ -8,7 +8,7 @@ type StatView = {
   value: string
   score: number
   grade: Grade
-  benchmark: string
+  benchmark?: string
 }
 
 export type ReportPdfData = {
@@ -42,6 +42,12 @@ const line = (doc: jsPDF, text: string, x: number, y: number) => {
   return y
 }
 
+const asText = (value: unknown, fallback = "-") => {
+  if (value === null || value === undefined) return fallback
+  const text = String(value).trim()
+  return text.length > 0 ? text : fallback
+}
+
 export const saveScoutingReportPdf = (data: ReportPdfData, fileName: string) => {
   const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" })
   ensureKoreanFont(doc)
@@ -69,10 +75,10 @@ export const saveScoutingReportPdf = (data: ReportPdfData, fileName: string) => 
 
   doc.setFontSize(11)
   doc.setTextColor(51, 65, 85)
-  y = line(doc, `선수명: ${data.playerName}`, margin, y) + 5
-  y = line(doc, `나이 / 포지션: ${data.age}세 / ${data.position}`, margin, y) + 5
-  y = line(doc, `소속팀: ${data.team}`, margin, y) + 5
-  y = line(doc, `측정일: ${data.measurementDate}`, margin, y) + 7
+  y = line(doc, `선수명: ${asText(data.playerName)}`, margin, y) + 5
+  y = line(doc, `나이 / 포지션: ${asText(data.age)}세 / ${asText(data.position)}`, margin, y) + 5
+  y = line(doc, `소속팀: ${asText(data.team)}`, margin, y) + 5
+  y = line(doc, `측정일: ${asText(data.measurementDate)}`, margin, y) + 7
 
   ensureSpace(16)
   doc.setFillColor(240, 253, 244)
@@ -88,10 +94,14 @@ export const saveScoutingReportPdf = (data: ReportPdfData, fileName: string) => 
   y = line(doc, "측정 항목별 결과", margin, y) + 5
 
   data.stats.forEach((stat) => {
-    const nameLines = doc.splitTextToSize(stat.name, 38)
-    const valueLines = doc.splitTextToSize(stat.value, 50)
-    const benchmarkLines = doc.splitTextToSize(`기준치: ${stat.benchmark}`, contentWidth - 84)
-    const cardHeight = Math.max(20, 6 + nameLines.length * 5 + valueLines.length * 5 + benchmarkLines.length * 4)
+    const safeName = asText(stat.name)
+    const safeValue = asText(stat.value)
+    const safeBenchmark = asText(stat.benchmark)
+    const nameLines = doc.splitTextToSize(safeName, 36)
+    const valueLines = doc.splitTextToSize(safeValue, 72)
+    const benchmarkLines = doc.splitTextToSize(`기준치: ${safeBenchmark}`, 72)
+    const textStackHeight = 6 + valueLines.length * 5 + benchmarkLines.length * 4
+    const cardHeight = Math.max(22, textStackHeight + 6)
 
     ensureSpace(cardHeight + 3)
 
@@ -113,7 +123,7 @@ export const saveScoutingReportPdf = (data: ReportPdfData, fileName: string) => 
 
     doc.setFontSize(10)
     doc.setTextColor(51, 65, 85)
-    doc.text(`${stat.grade} / ${stat.score}점`, pageWidth - margin - 3, y + 1, { align: "right" })
+    doc.text(`${asText(stat.grade)} / ${asText(stat.score)}점`, pageWidth - margin - 3, y + 1, { align: "right" })
 
     y += cardHeight + 3
   })
@@ -123,16 +133,34 @@ export const saveScoutingReportPdf = (data: ReportPdfData, fileName: string) => 
   doc.setTextColor(30, 41, 59)
   y = line(doc, "종합 코멘트", margin, y) + 5
 
-  const commentLines = doc.splitTextToSize(data.comment, contentWidth - 6)
-  const commentHeight = Math.max(14, commentLines.length * 5 + 7)
-  ensureSpace(commentHeight)
+  const commentLines = doc.splitTextToSize(asText(data.comment), contentWidth - 6) as string[]
+  let commentIndex = 0
 
-  doc.setFillColor(255, 255, 255)
-  doc.setDrawColor(226, 232, 240)
-  doc.roundedRect(margin, y - 4, contentWidth, commentHeight, 2, 2, "FD")
-  doc.setFontSize(10.5)
-  doc.setTextColor(71, 85, 105)
-  doc.text(commentLines, margin + 3, y + 1)
+  while (commentIndex < commentLines.length) {
+    ensureSpace(14)
+    const maxBoxHeight = pageHeight - margin - (y - 4)
+    const maxLines = Math.max(1, Math.floor((maxBoxHeight - 7) / 5))
+    const linesForPage = commentLines.slice(commentIndex, commentIndex + maxLines)
+    const commentHeight = Math.max(14, linesForPage.length * 5 + 7)
+    ensureSpace(commentHeight)
+
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(226, 232, 240)
+    doc.roundedRect(margin, y - 4, contentWidth, commentHeight, 2, 2, "FD")
+    doc.setFontSize(10.5)
+    doc.setTextColor(71, 85, 105)
+    doc.text(linesForPage, margin + 3, y + 1)
+
+    commentIndex += linesForPage.length
+    y += commentHeight + 4
+
+    if (commentIndex < commentLines.length) {
+      ensureSpace(16)
+      doc.setFontSize(12)
+      doc.setTextColor(30, 41, 59)
+      y = line(doc, "종합 코멘트 (계속)", margin, y) + 5
+    }
+  }
 
   doc.save(fileName)
 }
