@@ -11,11 +11,7 @@ export function ShareButton({ copied, onShare }: ShareButtonProps) {
     <div className="flex justify-center pt-2 pb-4">
       <Button
         onClick={onShare}
-        className={`w-full max-w-sm gap-2 transition-all duration-200 ${
-          copied
-            ? "bg-emerald-500 hover:bg-emerald-600"
-            : "bg-slate-800 hover:bg-slate-900"
-        }`}
+        className="w-full max-w-sm gap-2 bg-emerald-600 transition-all duration-200 hover:bg-emerald-700"
         size="lg"
       >
         {copied ? (

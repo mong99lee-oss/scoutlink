@@ -192,9 +192,7 @@ export default function ReportPage() {
       <div className="mx-auto mt-2 flex max-w-2xl flex-col gap-2 pb-4 sm:flex-row">
         <Button
           onClick={handleCopyShare}
-          className={`flex-1 gap-2 transition-all duration-200 ${
-            copied ? "bg-emerald-500 hover:bg-emerald-600" : "bg-slate-800 hover:bg-slate-900"
-          }`}
+          className="flex-1 gap-2 bg-emerald-600 transition-all duration-200 hover:bg-emerald-700"
           size="lg"
         >
           {copied ? (

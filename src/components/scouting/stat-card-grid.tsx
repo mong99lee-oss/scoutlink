@@ -25,11 +25,11 @@ interface StatCardGridProps {
 }
 
 const gradeConfig: Record<Grade, { bg: string; text: string; border: string }> = {
-  엘리트: { bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-300" },
-  우수: { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-300" },
-  평균이상: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-300" },
-  평균이하: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-300" },
-  기초: { bg: "bg-red-100", text: "text-red-700", border: "border-red-300" },
+  엘리트: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-300" },
+  우수: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-300" },
+  평균이상: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-300" },
+  평균이하: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-300" },
+  기초: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-300" },
 }
 
 const statIcons: Record<string, React.ReactNode> = {
@@ -53,17 +53,7 @@ function StatCard({ stat }: { stat: Stat }) {
       {/* 점수 프로그레스 바 - 하단 */}
       <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-100">
         <div
-          className={`h-full transition-all duration-500 ${
-            stat.grade === "엘리트"
-              ? "bg-amber-400"
-              : stat.grade === "우수"
-                ? "bg-emerald-400"
-                : stat.grade === "평균이상"
-                  ? "bg-blue-400"
-                  : stat.grade === "평균이하"
-                    ? "bg-orange-400"
-                    : "bg-red-400"
-          }`}
+          className="h-full bg-emerald-400 transition-all duration-500"
           style={{ width: `${stat.score}%` }}
         />
       </div>
@@ -86,9 +76,8 @@ function StatCard({ stat }: { stat: Stat }) {
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-bold ${config.bg} ${config.text} ${config.border} border`}
           >
-            {stat.grade}
+            {stat.score}점 · {stat.grade}
           </span>
-          <div className="mt-1.5 text-sm font-bold text-slate-500">{stat.score}점</div>
         </div>
       </div>
     </Card>

@@ -72,12 +72,12 @@ export default function PlayerDetailPage({ params }: PlayerDetailPageProps) {
               <p className="mt-1 text-xs text-slate-400">측정일 {measuredDate}</p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-              {overallGrade} · {player.report.overallScore}점
+              {player.report.overallScore}점 · {overallGrade}
             </span>
           </div>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Link href={`/report?id=${player.id}`} className="flex-1">
-              <Button className="w-full bg-slate-800 hover:bg-slate-900">리포트 보기</Button>
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700">리포트 보기</Button>
             </Link>
             <Link href={`/players/${player.id}/growth`} className="flex-1">
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
