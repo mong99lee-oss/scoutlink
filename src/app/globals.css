@@ -82,3 +82,18 @@
     color: hsl(222.2 84% 4.9%);
   }
 }
+
+.pdf-capture-root {
+  font-family:
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    "Segoe UI",
+    sans-serif;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.pdf-capture-root * {
+  text-wrap: pretty;
+}

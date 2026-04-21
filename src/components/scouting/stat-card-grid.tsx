@@ -49,7 +49,7 @@ function StatCard({ stat }: { stat: Stat }) {
   const icon = statIcons[stat.name] || <Activity className="h-5 w-5 text-slate-500" />
 
   return (
-    <Card className="relative overflow-hidden bg-white p-4">
+    <Card className="relative overflow-hidden bg-white p-4 pb-5">
       {/* 점수 프로그레스 바 - 하단 */}
       <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-100">
         <div
@@ -68,27 +68,27 @@ function StatCard({ stat }: { stat: Stat }) {
         />
       </div>
 
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex items-center gap-2">
             {icon}
-            <span className="text-sm font-bold text-slate-700">{stat.name}</span>
+            <span className="break-words text-sm font-bold text-slate-700">{stat.name}</span>
           </div>
-          <div className="text-2xl font-extrabold text-slate-900">{stat.value}</div>
+          <div className="break-all text-2xl font-extrabold leading-tight text-slate-900">{stat.value}</div>
           {stat.benchmark && (
-            <div className="mt-1 text-xs font-medium text-slate-400">
+            <div className="mt-1 break-all text-xs font-medium text-slate-400">
               기준치: {stat.benchmark}
             </div>
           )}
         </div>
 
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="shrink-0 text-right">
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-bold ${config.bg} ${config.text} ${config.border} border`}
           >
             {stat.grade}
           </span>
-          <span className="text-sm font-bold text-slate-500">{stat.score}점</span>
+          <div className="mt-1.5 text-sm font-bold text-slate-500">{stat.score}점</div>
         </div>
       </div>
     </Card>

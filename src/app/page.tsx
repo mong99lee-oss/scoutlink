@@ -1,10 +1,9 @@
 "use client"
 
 import { useRef, useState } from "react"
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
 import { buildReport, getBenchmarks, getGrade, type MetricKey, type PlayerMetrics, type PositionType } from "@/lib/report"
 import { createPlayer } from "@/lib/supabase"
+import { saveScoutingReportPdf } from "@/lib/pdf/report-pdf"
 import { PlayerProfileCard } from "@/components/scouting/player-profile-card"
 import { OverallGrade } from "@/components/scouting/overall-grade"
 import { RadarChart } from "@/components/scouting/radar-chart"
@@ -210,37 +209,24 @@ export default function ScoutingReportPage() {
   }
 
   const handleSavePdf = async () => {
-    if (!reportRef.current || isSavingPdf || !generatedReport) return
+    if (isSavingPdf || !generatedReport) return
 
     setIsSavingPdf(true)
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#f8fafc",
-      })
-
-      const imgData = canvas.toDataURL("image/png")
-      const pdf = new jsPDF("p", "mm", "a4")
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pdfWidth
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-
-      let heightLeft = imgHeight
-      let position = 0
-
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
-      heightLeft -= pdfHeight
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight
-        pdf.addPage()
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
-        heightLeft -= pdfHeight
-      }
-
-      pdf.save(`scouting-report-${generatedReport.name}.pdf`)
+      saveScoutingReportPdf(
+        {
+          playerName: generatedReport.name,
+          age: generatedReport.age,
+          position: generatedReport.position,
+          team: generatedReport.team,
+          measurementDate: generatedReport.measurementDate,
+          overallGrade: generatedReport.overallGrade,
+          overallScore: generatedReport.overallScore,
+          comment: generatedReport.comment,
+          stats: generatedReport.stats,
+        },
+        `scouting-report-${generatedReport.name}.pdf`,
+      )
     } catch (err) {
       console.error("Failed to save PDF:", err)
     } finally {
