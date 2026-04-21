@@ -59,9 +59,9 @@ const benchmark: Benchmark = {
       standingLongJump: 195,
       sideStep: 38,
       pushUp: 28,
-      sitAndReach: 8,
+      sitAndReach: 13,
       powerDribble10m: 2.6,
-      passingAccuracy: 22,
+      passingAccuracy: 28,
       blazePodReaction: 430,
     },
     u18: {
@@ -70,9 +70,9 @@ const benchmark: Benchmark = {
       standingLongJump: 220,
       sideStep: 42,
       pushUp: 36,
-      sitAndReach: 11,
+      sitAndReach: 16,
       powerDribble10m: 2.35,
-      passingAccuracy: 26,
+      passingAccuracy: 31,
       blazePodReaction: 390,
     },
     adult: {
@@ -81,9 +81,9 @@ const benchmark: Benchmark = {
       standingLongJump: 235,
       sideStep: 44,
       pushUp: 42,
-      sitAndReach: 13,
+      sitAndReach: 18,
       powerDribble10m: 2.2,
-      passingAccuracy: 29,
+      passingAccuracy: 34,
       blazePodReaction: 360,
     },
   },
@@ -94,9 +94,9 @@ const benchmark: Benchmark = {
       standingLongJump: 190,
       sideStep: 39,
       pushUp: 30,
-      sitAndReach: 9,
+      sitAndReach: 14,
       powerDribble10m: 2.65,
-      passingAccuracy: 24,
+      passingAccuracy: 30,
       blazePodReaction: 425,
     },
     u18: {
@@ -105,9 +105,9 @@ const benchmark: Benchmark = {
       standingLongJump: 215,
       sideStep: 43,
       pushUp: 38,
-      sitAndReach: 12,
+      sitAndReach: 17,
       powerDribble10m: 2.4,
-      passingAccuracy: 29,
+      passingAccuracy: 34,
       blazePodReaction: 385,
     },
     adult: {
@@ -116,9 +116,9 @@ const benchmark: Benchmark = {
       standingLongJump: 228,
       sideStep: 45,
       pushUp: 44,
-      sitAndReach: 14,
+      sitAndReach: 19,
       powerDribble10m: 2.25,
-      passingAccuracy: 32,
+      passingAccuracy: 36,
       blazePodReaction: 355,
     },
   },
@@ -129,9 +129,9 @@ const benchmark: Benchmark = {
       standingLongJump: 198,
       sideStep: 37,
       pushUp: 32,
-      sitAndReach: 7,
+      sitAndReach: 12,
       powerDribble10m: 2.75,
-      passingAccuracy: 21,
+      passingAccuracy: 26,
       blazePodReaction: 440,
     },
     u18: {
@@ -140,9 +140,9 @@ const benchmark: Benchmark = {
       standingLongJump: 223,
       sideStep: 41,
       pushUp: 40,
-      sitAndReach: 10,
+      sitAndReach: 15,
       powerDribble10m: 2.5,
-      passingAccuracy: 25,
+      passingAccuracy: 29,
       blazePodReaction: 400,
     },
     adult: {
@@ -151,9 +151,9 @@ const benchmark: Benchmark = {
       standingLongJump: 236,
       sideStep: 43,
       pushUp: 48,
-      sitAndReach: 12,
+      sitAndReach: 17,
       powerDribble10m: 2.35,
-      passingAccuracy: 28,
+      passingAccuracy: 32,
       blazePodReaction: 370,
     },
   },
@@ -193,6 +193,65 @@ export const getOverallEvaluation = (overall: number) => {
   return "기초 등급입니다. 기본 체력/기술의 우선 강화가 필요합니다.";
 };
 
+const metricName: Record<MetricKey, string> = {
+  sprint10m: "10m 스프린트",
+  sprint30m: "30m 스프린트",
+  standingLongJump: "제자리멀리뛰기",
+  sideStep: "사이드스텝",
+  pushUp: "팔굽혀펴기",
+  sitAndReach: "장좌체전굴",
+  powerDribble10m: "파워드리블",
+  passingAccuracy: "패싱정확도",
+  blazePodReaction: "BlazePod 반응속도",
+};
+
+const trainingTip: Record<MetricKey, string> = {
+  sprint10m: "짧은 거리 스타트 드릴과 하체 폭발력 훈련",
+  sprint30m: "가속-유지 구간 반복 훈련과 주기적 스프린트 인터벌",
+  standingLongJump: "플라이오메트릭 점프와 코어-둔근 강화",
+  sideStep: "민첩성 사다리와 방향 전환 스텝 훈련",
+  pushUp: "상체 근지구력 서킷(푸시업/플랭크/메디신볼)",
+  sitAndReach: "햄스트링-고관절 중심의 동적/정적 유연성 루틴",
+  powerDribble10m: "속도 유지 드리블과 양발 터치 빈도 향상 훈련",
+  passingAccuracy: "짧은-중거리 원터치 패스와 약발 패스 정확도 훈련",
+  blazePodReaction: "시각 자극 기반 반응 선택 훈련과 인지 전환 드릴",
+};
+
+const buildDetailedEvaluation = (
+  scores: Record<MetricKey, number>,
+  overall: number
+) => {
+  const entries = (Object.keys(scores) as MetricKey[]).map((key) => ({
+    key,
+    score: scores[key],
+  }));
+  const sorted = [...entries].sort((a, b) => b.score - a.score);
+  const top2 = sorted.slice(0, 2);
+  const bottom2 = sorted.slice(-2).sort((a, b) => a.score - b.score);
+
+  const strongText = top2
+    .map((item) => `${metricName[item.key]}(${item.score}점)`)
+    .join(", ");
+  const weakText = bottom2
+    .map((item) => `${metricName[item.key]}(${item.score}점)`)
+    .join(", ");
+  const recommendText = Array.from(new Set(bottom2.map((item) => trainingTip[item.key]))).join(
+    " / "
+  );
+
+  return `${getOverallEvaluation(overall)} 강점은 ${strongText}로 확인되어 경기 전개에서 경쟁력이 높습니다. 반면 보완이 필요한 항목은 ${weakText}입니다. 다음 훈련 주기에는 ${recommendText}을 중심으로 4~6주 프로그램을 운영하면 종합 점수 향상을 기대할 수 있습니다.`;
+};
+
+export const getBenchmarks = (
+  position: string,
+  age: number
+): PlayerMetrics => {
+  const ageBand = getAgeBand(age);
+  const normalizedPosition: PositionType =
+    position === "FW" || position === "DF" || position === "MF" ? position : "MF";
+  return benchmark[normalizedPosition][ageBand];
+};
+
 export const buildReport = (
   metrics: PlayerMetrics,
   age: number,
@@ -229,6 +288,6 @@ export const buildReport = (
       blazePodReaction: getGrade(scored.blazePodReaction),
     },
     overallScore,
-    overallEvaluation: getOverallEvaluation(overallScore),
+    overallEvaluation: buildDetailedEvaluation(scored, overallScore),
   };
 };

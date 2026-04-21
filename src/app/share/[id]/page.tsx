@@ -1,28 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Radar } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LineElement,
-  PointElement,
-  RadialLinearScale,
-  Tooltip,
-} from "chart.js";
-import { getPlayerById, PlayerRecord } from "../../../lib/supabase";
-import { metricLabels } from "../../../lib/report";
-
-ChartJS.register(
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend
-);
+import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { getPlayerById, type PlayerRecord } from "../../../lib/supabase";
+import { getBenchmarks, getGrade, type MetricKey, type PlayerMetrics } from "../../../lib/report";
+import { PlayerProfileCard } from "@/components/scouting/player-profile-card";
+import { OverallGrade } from "@/components/scouting/overall-grade";
+import { RadarChart } from "@/components/scouting/radar-chart";
+import { StatCardGrid } from "@/components/scouting/stat-card-grid";
+import { CommentSection } from "@/components/scouting/comment-section";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 type SharePageProps = {
   params: {
@@ -30,9 +20,31 @@ type SharePageProps = {
   };
 };
 
+type StatView = {
+  name: string;
+  value: string;
+  score: number;
+  grade: "엘리트" | "우수" | "평균이상" | "평균이하" | "기초";
+  benchmark: string;
+};
+
+const metricRows: Array<{ key: MetricKey; label: string; unit: string }> = [
+  { key: "sprint10m", label: "10m스프린트", unit: "초" },
+  { key: "sprint30m", label: "30m스프린트", unit: "초" },
+  { key: "standingLongJump", label: "제자리멀리뛰기", unit: "cm" },
+  { key: "sideStep", label: "사이드스텝", unit: "회" },
+  { key: "pushUp", label: "팔굽혀펴기", unit: "회" },
+  { key: "sitAndReach", label: "장좌체전굴", unit: "cm" },
+  { key: "powerDribble10m", label: "파워드리블", unit: "초" },
+  { key: "passingAccuracy", label: "패싱정확도", unit: "개/45초" },
+  { key: "blazePodReaction", label: "BlazePod반응속도", unit: "ms" },
+];
+
 export default function SharePage({ params }: SharePageProps) {
   const [player, setPlayer] = useState<PlayerRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadPlayer = async () => {
@@ -44,97 +56,119 @@ export default function SharePage({ params }: SharePageProps) {
     void loadPlayer();
   }, [params.id]);
 
+  const stats = useMemo<StatView[]>(() => {
+    if (!player?.report || !player.metrics) return [];
+    let benchmarks: PlayerMetrics | null = null;
+    try {
+      benchmarks = getBenchmarks(player.position, player.age);
+    } catch {
+      benchmarks = null;
+    }
+
+    return metricRows.map((row) => ({
+      name: row.label,
+      value: `${player.metrics?.[row.key] ?? "-"}${row.unit}`,
+      score: player.report?.scores[row.key] ?? 0,
+      grade: (player.report?.grades[row.key] ?? "기초") as StatView["grade"],
+      benchmark: `${benchmarks?.[row.key] ?? "-"}${row.unit}`,
+    }));
+  }, [player]);
+
+  const handleSavePdf = async () => {
+    if (!reportRef.current || isSavingPdf || !player) return;
+
+    setIsSavingPdf(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`scouting-report-${player.name}.pdf`);
+    } catch (err) {
+      console.error("Failed to save PDF:", err);
+    } finally {
+      setIsSavingPdf(false);
+    }
+  };
+
   if (loading) {
     return (
-      <main className="stack">
-        <h1>공유 페이지</h1>
-        <p>불러오는 중...</p>
+      <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
+        <div className="mx-auto max-w-2xl">
+          <Card className="bg-white p-5 text-sm font-medium text-slate-500">불러오는 중...</Card>
+        </div>
       </main>
     );
   }
 
-  if (!player) {
+  if (!player || !player.report) {
     return (
-      <main className="stack">
-        <h1>공유 페이지</h1>
-        <p>해당 선수를 찾을 수 없습니다.</p>
-        <Link href="/players">선수 목록으로 이동</Link>
+      <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
+        <div className="mx-auto max-w-2xl space-y-4">
+          <Card className="bg-white p-5 text-sm font-medium text-slate-600">
+            해당 선수 리포트를 찾을 수 없습니다.
+          </Card>
+          <Link href="/players" className="text-sm font-semibold text-slate-600 hover:text-slate-900">
+            선수 목록으로 이동
+          </Link>
+        </div>
       </main>
     );
   }
 
-  const labels = Object.values(metricLabels);
-  const values = player.report
-    ? [
-        player.report.scores.sprint10m,
-        player.report.scores.sprint30m,
-        player.report.scores.standingLongJump,
-        player.report.scores.sideStep,
-        player.report.scores.pushUp,
-        player.report.scores.sitAndReach,
-        player.report.scores.powerDribble10m,
-        player.report.scores.passingAccuracy,
-        player.report.scores.blazePodReaction,
-      ]
-    : [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const measurementDate = player.created_at
+    ? new Date(player.created_at).toLocaleDateString("ko-KR").replace(/\.\s?/g, ".")
+    : "-";
+  const overallGrade = getGrade(player.report.overallScore) as StatView["grade"];
 
   return (
-    <main className="stack">
-      <h1>공유된 선수 정보</h1>
-      <article className="card stack">
-        <strong>{player.name}</strong>
-        <span>나이: {player.age}</span>
-        <span>포지션: {player.position}</span>
-        <span>팀: {player.team}</span>
-        <span>메모: {player.note ?? "-"}</span>
-        <div style={{ maxWidth: "520px" }}>
-          <Radar
-            data={{
-              labels,
-              datasets: [
-                {
-                  label: "선수 역량",
-                  data: values,
-                  borderColor: "#2563eb",
-                  backgroundColor: "rgba(37, 99, 235, 0.2)",
-                  borderWidth: 2,
-                },
-              ],
-            }}
-            options={{
-              scales: {
-                r: {
-                  min: 0,
-                  max: 100,
-                  ticks: {
-                    stepSize: 20,
-                  },
-                },
-              },
-            }}
-          />
+    <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
+      <div ref={reportRef} className="mx-auto max-w-2xl space-y-4">
+        <PlayerProfileCard
+          name={player.name}
+          age={player.age}
+          position={player.position}
+          team={player.team}
+          measurementDate={measurementDate}
+        />
+        <OverallGrade grade={overallGrade} score={player.report.overallScore} />
+        <RadarChart stats={stats} />
+        <StatCardGrid stats={stats} />
+        <CommentSection comment={player.report.overallEvaluation} />
+
+        <div className="pb-4">
+          <Button
+            onClick={handleSavePdf}
+            disabled={isSavingPdf}
+            className="w-full bg-emerald-600 hover:bg-emerald-700"
+            size="lg"
+          >
+            {isSavingPdf ? "PDF 저장 중..." : "리포트 PDF 저장"}
+          </Button>
         </div>
-        <h3>항목별 등급</h3>
-        {player.report ? (
-          <>
-            <span>10m 스프린트: {player.report.grades.sprint10m}</span>
-            <span>30m 스프린트: {player.report.grades.sprint30m}</span>
-            <span>제자리멀리뛰기: {player.report.grades.standingLongJump}</span>
-            <span>사이드스텝: {player.report.grades.sideStep}</span>
-            <span>팔굽혀펴기: {player.report.grades.pushUp}</span>
-            <span>장좌체전굴: {player.report.grades.sitAndReach}</span>
-            <span>파워드리블 10m: {player.report.grades.powerDribble10m}</span>
-            <span>패싱 정확도: {player.report.grades.passingAccuracy}</span>
-            <span>BlazePod 반응속도: {player.report.grades.blazePodReaction}</span>
-            <h3>종합 평가</h3>
-            <span>종합 점수: {player.report.overallScore}</span>
-            <span>{player.report.overallEvaluation}</span>
-          </>
-        ) : (
-          <span>등급 데이터가 없습니다.</span>
-        )}
-      </article>
-      <Link href="/players">선수 목록으로 이동</Link>
+      </div>
     </main>
   );
 }

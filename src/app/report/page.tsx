@@ -1,50 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Radar } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LineElement,
-  PointElement,
-  RadialLinearScale,
-  Tooltip,
-} from "chart.js";
-import { getPlayerById, PlayerRecord } from "../../lib/supabase";
-import {
-  getBenchmarks,
-  getGrade,
-  metricLabels,
-  MetricKey,
-  type PlayerMetrics,
-  type PlayerReport,
-} from "../../lib/report";
+import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { Check, Link2 } from "lucide-react";
+import { getPlayerById, type PlayerRecord } from "../../lib/supabase";
+import { getBenchmarks, getGrade, type MetricKey, type PlayerMetrics } from "../../lib/report";
+import { PlayerProfileCard } from "@/components/scouting/player-profile-card";
+import { OverallGrade } from "@/components/scouting/overall-grade";
+import { RadarChart } from "@/components/scouting/radar-chart";
+import { StatCardGrid } from "@/components/scouting/stat-card-grid";
+import { CommentSection } from "@/components/scouting/comment-section";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
-ChartJS.register(
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend
-);
-
-const gradeColor: Record<string, string> = {
-  엘리트: "#FFD700",
-  우수: "#22C55E",
-  평균이상: "#3B82F6",
-  평균이하: "#F97316",
-  기초: "#EF4444",
+type StatView = {
+  name: string;
+  value: string;
+  score: number;
+  grade: "엘리트" | "우수" | "평균이상" | "평균이하" | "기초";
+  benchmark: string;
 };
 
-const gradeTextColor = () => "#0b1220";
+const metricRows: Array<{ key: MetricKey; label: string; unit: string }> = [
+  { key: "sprint10m", label: "10m스프린트", unit: "초" },
+  { key: "sprint30m", label: "30m스프린트", unit: "초" },
+  { key: "standingLongJump", label: "제자리멀리뛰기", unit: "cm" },
+  { key: "sideStep", label: "사이드스텝", unit: "회" },
+  { key: "pushUp", label: "팔굽혀펴기", unit: "회" },
+  { key: "sitAndReach", label: "장좌체전굴", unit: "cm" },
+  { key: "powerDribble10m", label: "파워드리블", unit: "초" },
+  { key: "passingAccuracy", label: "패싱정확도", unit: "개/45초" },
+  { key: "blazePodReaction", label: "BlazePod반응속도", unit: "ms" },
+];
 
 export default function ReportPage() {
   const [player, setPlayer] = useState<PlayerRecord | null>(null);
   const [id, setId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const search = typeof window !== "undefined" ? window.location.search : "";
@@ -69,222 +66,154 @@ export default function ReportPage() {
     void run();
   }, [id]);
 
-  const metricKeys = useMemo(() => Object.keys(metricLabels) as MetricKey[], []);
+  const stats = useMemo<StatView[]>(() => {
+    if (!player?.report || !player.metrics) return [];
+    let benchmarks: PlayerMetrics | null = null;
+    try {
+      benchmarks = getBenchmarks(player.position, player.age);
+    } catch {
+      benchmarks = null;
+    }
 
-  const radarLabels = useMemo(() => metricKeys.map((k) => metricLabels[k]), [metricKeys]);
-
-  const radarValues = useMemo(() => {
-    if (!player?.report) return metricKeys.map(() => 0);
-    return metricKeys.map((k) => player.report!.scores[k]);
-  }, [metricKeys, player]);
-
-  const overallGrade = useMemo(() => {
-    if (!player?.report) return "기초";
-    return getGrade(player.report.overallScore);
+    return metricRows.map((row) => ({
+      name: row.label,
+      value: `${player.metrics?.[row.key] ?? "-"}${row.unit}`,
+      score: player.report?.scores[row.key] ?? 0,
+      grade: (player.report?.grades[row.key] ?? "기초") as StatView["grade"],
+      benchmark: `${benchmarks?.[row.key] ?? "-"}${row.unit}`,
+    }));
   }, [player]);
 
-  const benchmarks = useMemo<PlayerMetrics | null>(() => {
-    if (!player) return null;
-    try {
-      return getBenchmarks(player.position, player.age);
-    } catch {
-      return null;
-    }
+  const shareUrl = useMemo(() => {
+    if (!player || typeof window === "undefined") return "";
+    return `${window.location.origin}/share/${player.id}`;
   }, [player]);
 
   const handleCopyShare = async () => {
-    if (!player) return;
-    const url = `${window.location.origin}/share/${player.id}`;
+    if (!shareUrl) return;
     try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // 권한 이슈는 무시
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  const handleSavePdf = async () => {
+    if (!reportRef.current || isSavingPdf || !player) return;
+
+    setIsSavingPdf(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`scouting-report-${player.name}.pdf`);
+    } catch (err) {
+      console.error("Failed to save PDF:", err);
+    } finally {
+      setIsSavingPdf(false);
     }
   };
 
   if (loading) {
     return (
-      <main className="stack">
-        <h1>리포트</h1>
-        <p>불러오는 중...</p>
+      <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
+        <div className="mx-auto max-w-2xl">
+          <Card className="bg-white p-5 text-sm font-medium text-slate-500">불러오는 중...</Card>
+        </div>
       </main>
     );
   }
 
-  if (!player) {
+  if (!player || !player.report) {
     return (
-      <main className="stack">
-        <h1>리포트</h1>
-        <p>해당 선수를 찾을 수 없습니다.</p>
-        <Link href="/">홈으로</Link>
+      <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
+        <div className="mx-auto max-w-2xl space-y-4">
+          <Card className="bg-white p-5 text-sm font-medium text-slate-600">
+            해당 선수 리포트를 찾을 수 없습니다.
+          </Card>
+          <Link href="/players" className="text-sm font-semibold text-slate-600 hover:text-slate-900">
+            선수 목록으로 이동
+          </Link>
+        </div>
       </main>
     );
   }
 
-  const report: PlayerReport | null = player.report ?? null;
-  const overallBg = gradeColor[overallGrade] ?? "#94a3b8";
+  const measurementDate = player.created_at
+    ? new Date(player.created_at).toLocaleDateString("ko-KR").replace(/\.\s?/g, ".")
+    : "-";
+  const overallGrade = getGrade(player.report.overallScore) as StatView["grade"];
 
   return (
-    <main className="stack">
-      {/* 1) 상단 선수 프로필 카드 */}
-      <section className="card stack" style={{ padding: "1.15rem" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-          <div style={{ minWidth: 260 }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.03em", color: "#0f172a" }}>
-              {player.name}
-            </div>
-            <div style={{ marginTop: 8, color: "#334155", display: "grid", gap: 6 }}>
-              <div>
-                나이: <strong style={{ color: "#0f172a" }}>{player.age}</strong>
-              </div>
-              <div>
-                포지션: <strong style={{ color: "#0f172a" }}>{player.position}</strong>
-              </div>
-              <div>
-                팀: <strong style={{ color: "#0f172a" }}>{player.team}</strong>
-              </div>
-              <div style={{ fontSize: 13 }}>
-                측정일:{" "}
-                <strong style={{ color: "#0f172a" }}>
-                  {player.created_at ? new Date(player.created_at).toLocaleDateString() : "-"}
-                </strong>
-              </div>
-            </div>
-          </div>
+    <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
+      <div ref={reportRef} className="mx-auto max-w-2xl space-y-4">
+        <PlayerProfileCard
+          name={player.name}
+          age={player.age}
+          position={player.position}
+          team={player.team}
+          measurementDate={measurementDate}
+        />
+        <OverallGrade grade={overallGrade} score={player.report.overallScore} />
+        <RadarChart stats={stats} />
+        <StatCardGrid stats={stats} />
+        <CommentSection comment={player.report.overallEvaluation} />
 
-          {/* 2) 종합 등급 크게 표시 */}
-          <div style={{ minWidth: 260, textAlign: "right" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end" }}>
-              <div style={{ fontSize: 44, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.04em", color: "#0f172a" }}>
-                {report?.overallScore ?? "-"}
-              </div>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "0.25rem 0.6rem",
-                  borderRadius: 999,
-                  background: overallBg,
-                  color: gradeTextColor(),
-                  fontWeight: 1000,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {overallGrade}
-              </span>
-            </div>
-            <div style={{ marginTop: 10, fontWeight: 900, color: "#475569" }}>
-              {report?.overallEvaluation ?? "등급 데이터가 없습니다."}
-            </div>
-          </div>
+        <div className="flex flex-col gap-2 pb-4 sm:flex-row">
+          <Button
+            onClick={handleCopyShare}
+            className={`flex-1 gap-2 transition-all duration-200 ${
+              copied ? "bg-emerald-500 hover:bg-emerald-600" : "bg-slate-800 hover:bg-slate-900"
+            }`}
+            size="lg"
+          >
+            {copied ? (
+              <>
+                <Check className="h-5 w-5" />
+                링크가 복사되었습니다!
+              </>
+            ) : (
+              <>
+                <Link2 className="h-5 w-5" />
+                공유 링크 복사
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleSavePdf}
+            disabled={isSavingPdf}
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+            size="lg"
+          >
+            {isSavingPdf ? "PDF 저장 중..." : "리포트 PDF 저장"}
+          </Button>
         </div>
-      </section>
-
-      {/* 3) 레이더차트 크게/선명하게 */}
-      <section className="card" style={{ padding: "1.15rem" }}>
-        <div style={{ fontSize: 18, fontWeight: 1000, color: "#0f172a" }}>레이더차트</div>
-        <div style={{ marginTop: 10, height: 460 }}>
-          <Radar
-            data={{
-              labels: radarLabels,
-              datasets: [
-                {
-                  label: "선수 역량",
-                  data: radarValues,
-                  borderColor: "#2563eb",
-                  backgroundColor: "rgba(37, 99, 235, 0.22)",
-                  borderWidth: 2,
-                },
-              ],
-            }}
-            options={{
-              maintainAspectRatio: false,
-              responsive: true,
-              plugins: { legend: { display: false } },
-              scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
-            }}
-          />
-        </div>
-      </section>
-
-      {/* 4) 9개 항목 카드형 그리드 */}
-      <section className="card" style={{ padding: "1.15rem" }}>
-        <div style={{ fontSize: 18, fontWeight: 1000, color: "#0f172a" }}>항목별 등급</div>
-        <div
-          style={{
-            marginTop: 12,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {metricKeys.map((key) => {
-            const grade = report?.grades[key] ?? "기초";
-            const badgeBg = gradeColor[grade] ?? "#94a3b8";
-            const value = player.metrics?.[key];
-            const baseline = benchmarks?.[key];
-            return (
-              <div
-                key={key}
-                style={{
-                  borderRadius: 14,
-                  padding: "0.95rem",
-                  border: "1px solid rgba(219, 227, 239, 1)",
-                  background: "white",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                  <div style={{ fontWeight: 1000, color: "#0f172a" }}>{metricLabels[key]}</div>
-                  <span
-                    style={{
-                      background: badgeBg,
-                      padding: "0.25rem 0.55rem",
-                      borderRadius: 999,
-                      color: gradeTextColor(),
-                      fontWeight: 1000,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {grade}
-                  </span>
-                </div>
-
-                <div style={{ marginTop: 10, display: "grid", gap: 6, color: "#334155" }}>
-                  <div>
-                    측정값:{" "}
-                    <strong style={{ color: "#0f172a" }}>{typeof value === "number" ? value : "-"}</strong>
-                  </div>
-                  <div>
-                    기준치:{" "}
-                    <strong style={{ color: "#0f172a" }}>
-                      {typeof baseline === "number" ? baseline : "-"}
-                    </strong>
-                  </div>
-                  <div>
-                    평가점수:{" "}
-                    <strong style={{ color: "#0f172a" }}>
-                      {report?.scores[key] ?? 0}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 5) 하단 공유 링크 버튼 */}
-      <section className="card" style={{ padding: "1.15rem" }}>
-        <div style={{ fontSize: 18, fontWeight: 1000, color: "#0f172a" }}>공유 링크</div>
-        <div style={{ marginTop: 10, color: "#475569", fontWeight: 800 }}>
-          아래 버튼으로 공유 링크를 복사할 수 있습니다.
-        </div>
-        <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-          <button type="button" className="secondary" onClick={handleCopyShare}>
-            공유 링크 복사
-          </button>
-        </div>
-      </section>
+      </div>
     </main>
   );
 }
