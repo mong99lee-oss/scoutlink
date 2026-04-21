@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { Check, Link2 } from "lucide-react";
 import { getPlayerById, type PlayerRecord } from "../../lib/supabase";
 import { getBenchmarks, getGrade, type MetricKey, type PlayerMetrics } from "../../lib/report";
-import { saveScoutingReportPdf } from "@/lib/pdf/report-pdf";
 import { PlayerProfileCard } from "@/components/scouting/player-profile-card";
 import { OverallGrade } from "@/components/scouting/overall-grade";
 import { RadarChart } from "@/components/scouting/radar-chart";
@@ -100,29 +101,41 @@ export default function ReportPage() {
   };
 
   const handleSavePdf = async () => {
-    if (isSavingPdf || !player) return;
+    if (!reportRef.current || isSavingPdf || !player) return;
 
     setIsSavingPdf(true);
     try {
-      const pdfMeasurementDate = player.created_at
-        ? new Date(player.created_at).toLocaleDateString("ko-KR").replace(/\.\s?/g, ".")
-        : "-";
-      const pdfOverallGrade = getGrade(player.report.overallScore) as StatView["grade"];
+      if (typeof document !== "undefined" && "fonts" in document) {
+        await document.fonts.ready;
+      }
 
-      saveScoutingReportPdf(
-        {
-          playerName: player.name,
-          age: player.age,
-          position: player.position,
-          team: player.team,
-          measurementDate: pdfMeasurementDate,
-          overallGrade: pdfOverallGrade,
-          overallScore: player.report.overallScore,
-          comment: player.report.overallEvaluation,
-          stats,
-        },
-        `scouting-report-${player.name}.pdf`,
-      );
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`scouting-report-${player.name}.pdf`);
     } catch (err) {
       console.error("Failed to save PDF:", err);
     } finally {
@@ -175,35 +188,35 @@ export default function ReportPage() {
         <StatCardGrid stats={stats} />
         <CommentSection comment={player.report.overallEvaluation} />
 
-        <div className="flex flex-col gap-2 pb-4 sm:flex-row">
-          <Button
-            onClick={handleCopyShare}
-            className={`flex-1 gap-2 transition-all duration-200 ${
-              copied ? "bg-emerald-500 hover:bg-emerald-600" : "bg-slate-800 hover:bg-slate-900"
-            }`}
-            size="lg"
-          >
-            {copied ? (
-              <>
-                <Check className="h-5 w-5" />
-                링크가 복사되었습니다!
-              </>
-            ) : (
-              <>
-                <Link2 className="h-5 w-5" />
-                공유 링크 복사
-              </>
-            )}
-          </Button>
-          <Button
-            onClick={handleSavePdf}
-            disabled={isSavingPdf}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-            size="lg"
-          >
-            {isSavingPdf ? "PDF 저장 중..." : "리포트 PDF 저장"}
-          </Button>
-        </div>
+      </div>
+      <div className="mx-auto mt-2 flex max-w-2xl flex-col gap-2 pb-4 sm:flex-row">
+        <Button
+          onClick={handleCopyShare}
+          className={`flex-1 gap-2 transition-all duration-200 ${
+            copied ? "bg-emerald-500 hover:bg-emerald-600" : "bg-slate-800 hover:bg-slate-900"
+          }`}
+          size="lg"
+        >
+          {copied ? (
+            <>
+              <Check className="h-5 w-5" />
+              링크가 복사되었습니다!
+            </>
+          ) : (
+            <>
+              <Link2 className="h-5 w-5" />
+              공유 링크 복사
+            </>
+          )}
+        </Button>
+        <Button
+          onClick={handleSavePdf}
+          disabled={isSavingPdf}
+          className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+          size="lg"
+        >
+          {isSavingPdf ? "PDF 저장 중..." : "리포트 PDF 저장"}
+        </Button>
       </div>
     </main>
   );

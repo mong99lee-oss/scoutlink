@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { getPlayerById, type PlayerRecord } from "../../../lib/supabase";
 import { getBenchmarks, getGrade, type MetricKey, type PlayerMetrics } from "../../../lib/report";
-import { saveScoutingReportPdf } from "@/lib/pdf/report-pdf";
 import { PlayerProfileCard } from "@/components/scouting/player-profile-card";
 import { OverallGrade } from "@/components/scouting/overall-grade";
 import { RadarChart } from "@/components/scouting/radar-chart";
@@ -74,29 +75,41 @@ export default function SharePage({ params }: SharePageProps) {
   }, [player]);
 
   const handleSavePdf = async () => {
-    if (isSavingPdf || !player) return;
+    if (!reportRef.current || isSavingPdf || !player) return;
 
     setIsSavingPdf(true);
     try {
-      const pdfMeasurementDate = player.created_at
-        ? new Date(player.created_at).toLocaleDateString("ko-KR").replace(/\.\s?/g, ".")
-        : "-";
-      const pdfOverallGrade = getGrade(player.report.overallScore) as StatView["grade"];
+      if (typeof document !== "undefined" && "fonts" in document) {
+        await document.fonts.ready;
+      }
 
-      saveScoutingReportPdf(
-        {
-          playerName: player.name,
-          age: player.age,
-          position: player.position,
-          team: player.team,
-          measurementDate: pdfMeasurementDate,
-          overallGrade: pdfOverallGrade,
-          overallScore: player.report.overallScore,
-          comment: player.report.overallEvaluation,
-          stats,
-        },
-        `scouting-report-${player.name}.pdf`,
-      );
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`scouting-report-${player.name}.pdf`);
     } catch (err) {
       console.error("Failed to save PDF:", err);
     } finally {
@@ -149,16 +162,16 @@ export default function SharePage({ params }: SharePageProps) {
         <StatCardGrid stats={stats} />
         <CommentSection comment={player.report.overallEvaluation} />
 
-        <div className="pb-4">
-          <Button
-            onClick={handleSavePdf}
-            disabled={isSavingPdf}
-            className="w-full bg-emerald-600 hover:bg-emerald-700"
-            size="lg"
-          >
-            {isSavingPdf ? "PDF 저장 중..." : "리포트 PDF 저장"}
-          </Button>
-        </div>
+      </div>
+      <div className="mx-auto mt-2 max-w-2xl pb-4">
+        <Button
+          onClick={handleSavePdf}
+          disabled={isSavingPdf}
+          className="w-full bg-emerald-600 hover:bg-emerald-700"
+          size="lg"
+        >
+          {isSavingPdf ? "PDF 저장 중..." : "리포트 PDF 저장"}
+        </Button>
       </div>
     </main>
   );

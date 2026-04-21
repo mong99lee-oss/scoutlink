@@ -1,9 +1,10 @@
 "use client"
 
 import { useRef, useState } from "react"
+import html2canvas from "html2canvas"
+import jsPDF from "jspdf"
 import { buildReport, getBenchmarks, getGrade, type MetricKey, type PlayerMetrics, type PositionType } from "@/lib/report"
 import { createPlayer } from "@/lib/supabase"
-import { saveScoutingReportPdf } from "@/lib/pdf/report-pdf"
 import { PlayerProfileCard } from "@/components/scouting/player-profile-card"
 import { OverallGrade } from "@/components/scouting/overall-grade"
 import { RadarChart } from "@/components/scouting/radar-chart"
@@ -209,24 +210,41 @@ export default function ScoutingReportPage() {
   }
 
   const handleSavePdf = async () => {
-    if (isSavingPdf || !generatedReport) return
+    if (!reportRef.current || isSavingPdf || !generatedReport) return
 
     setIsSavingPdf(true)
     try {
-      saveScoutingReportPdf(
-        {
-          playerName: generatedReport.name,
-          age: generatedReport.age,
-          position: generatedReport.position,
-          team: generatedReport.team,
-          measurementDate: generatedReport.measurementDate,
-          overallGrade: generatedReport.overallGrade,
-          overallScore: generatedReport.overallScore,
-          comment: generatedReport.comment,
-          stats: generatedReport.stats,
-        },
-        `scouting-report-${generatedReport.name}.pdf`,
-      )
+      if (typeof document !== "undefined" && "fonts" in document) {
+        await document.fonts.ready
+      }
+
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+      })
+
+      const imgData = canvas.toDataURL("image/png")
+      const pdf = new jsPDF("p", "mm", "a4")
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+      let heightLeft = imgHeight
+      let position = 0
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
+      heightLeft -= pdfHeight
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight)
+        heightLeft -= pdfHeight
+      }
+
+      pdf.save(`scouting-report-${generatedReport.name}.pdf`)
     } catch (err) {
       console.error("Failed to save PDF:", err)
     } finally {
@@ -236,7 +254,7 @@ export default function ScoutingReportPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 py-6 px-4 md:px-6">
-      <div ref={reportRef} className="mx-auto max-w-2xl space-y-4">
+      <div className="mx-auto max-w-2xl space-y-4">
         <section className="rounded-xl border bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-lg font-bold text-slate-900">1) 선수 정보 입력</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -338,7 +356,7 @@ export default function ScoutingReportPage() {
         </section>
 
         {generatedReport ? (
-          <>
+          <div ref={reportRef} className="space-y-4">
             <PlayerProfileCard
               name={generatedReport.name}
               age={generatedReport.age}
@@ -350,7 +368,7 @@ export default function ScoutingReportPage() {
             <RadarChart stats={generatedReport.stats} />
             <StatCardGrid stats={generatedReport.stats} />
             <CommentSection comment={generatedReport.comment} />
-          </>
+          </div>
         ) : null}
 
         <div className="flex flex-col gap-2 pb-4 sm:flex-row">
