@@ -78,7 +78,7 @@ export default function PlayersPage() {
               const overallScore = player.report?.overallScore ?? 0;
               const overallGrade = getGrade(overallScore);
               return (
-                <Link key={player.id} href={`/report?id=${player.id}`} className="block">
+                <Link key={player.id} href={`/players/${player.id}`} className="block">
                   <Card className="relative overflow-hidden bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
                     <div className="absolute right-4 top-4 flex items-center gap-2">
                       <span

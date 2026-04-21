@@ -120,3 +120,30 @@ export const getPlayerById = async (id: string): Promise<PlayerRecord | null> =>
   const players = readLocalPlayers();
   return players.find((player) => player.id === id) ?? null;
 };
+
+export const listPlayerHistoryById = async (id: string): Promise<PlayerRecord[]> => {
+  const target = await getPlayerById(id);
+  if (!target) return [];
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("players")
+      .select("*")
+      .eq("name", target.name)
+      .eq("position", target.position)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return (data ?? []) as PlayerRecord[];
+  }
+
+  return readLocalPlayers()
+    .filter((player) => player.name === target.name && player.position === target.position)
+    .sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+};
