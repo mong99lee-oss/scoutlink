@@ -34,6 +34,14 @@ type CreatePlayerInput = {
   report?: PlayerReport;
 };
 
+const remeasurePrefix = "base_player_id:";
+
+const extractBasePlayerId = (record: Pick<PlayerRecord, "id" | "note">): string => {
+  if (!record.note) return record.id;
+  const matched = record.note.match(/base_player_id:([^\s]+)/);
+  return matched?.[1] ?? record.id;
+};
+
 const readLocalPlayers = (): PlayerRecord[] => {
   if (typeof window === "undefined") {
     return [];
@@ -124,13 +132,13 @@ export const getPlayerById = async (id: string): Promise<PlayerRecord | null> =>
 export const listPlayerHistoryById = async (id: string): Promise<PlayerRecord[]> => {
   const target = await getPlayerById(id);
   if (!target) return [];
+  const baseId = extractBasePlayerId(target);
 
   if (supabase) {
     const { data, error } = await supabase
       .from("players")
       .select("*")
-      .eq("name", target.name)
-      .eq("position", target.position)
+      .or(`id.eq.${baseId},note.ilike.%${remeasurePrefix}${baseId}%`)
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -141,7 +149,7 @@ export const listPlayerHistoryById = async (id: string): Promise<PlayerRecord[]>
   }
 
   return readLocalPlayers()
-    .filter((player) => player.name === target.name && player.position === target.position)
+    .filter((player) => extractBasePlayerId(player) === baseId)
     .sort(
       (a, b) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()

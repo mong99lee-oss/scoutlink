@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, TrendingUp } from "lucide-react";
+import { ArrowLeft, RefreshCcw, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getGrade } from "@/lib/report";
@@ -78,6 +78,12 @@ export default function PlayerDetailPage({ params }: PlayerDetailPageProps) {
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Link href={`/report?id=${player.id}`} className="flex-1">
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700">리포트 보기</Button>
+            </Link>
+            <Link href={`/players/${player.id}/remeasure`} className="flex-1">
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                <RefreshCcw className="mr-1 h-4 w-4" />
+                재측정 하기
+              </Button>
             </Link>
             <Link href={`/players/${player.id}/growth`} className="flex-1">
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
