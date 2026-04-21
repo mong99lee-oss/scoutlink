@@ -35,7 +35,7 @@ type MetricRule = {
   lowerIsBetter: boolean;
 };
 
-type AgeBand = "u15" | "u18" | "adult";
+type AgeBand = "u10" | "u11" | "u12" | "u13" | "u14" | "u15" | "u16" | "u17" | "u18";
 
 type Benchmark = Record<PositionType, Record<AgeBand, PlayerMetrics>>;
 
@@ -51,7 +51,7 @@ const metricRules: Record<MetricKey, MetricRule> = {
   blazePodReaction: { lowerIsBetter: true },
 };
 
-const benchmark: Benchmark = {
+const benchmarkAnchors: Record<PositionType, { u15: PlayerMetrics; u18: PlayerMetrics }> = {
   FW: {
     u15: {
       sprint10m: 1.95,
@@ -74,17 +74,6 @@ const benchmark: Benchmark = {
       powerDribble10m: 2.35,
       passingAccuracy: 31,
       blazePodReaction: 390,
-    },
-    adult: {
-      sprint10m: 1.78,
-      sprint30m: 4.3,
-      standingLongJump: 235,
-      sideStep: 44,
-      pushUp: 42,
-      sitAndReach: 18,
-      powerDribble10m: 2.2,
-      passingAccuracy: 34,
-      blazePodReaction: 360,
     },
   },
   MF: {
@@ -110,17 +99,6 @@ const benchmark: Benchmark = {
       passingAccuracy: 34,
       blazePodReaction: 385,
     },
-    adult: {
-      sprint10m: 1.83,
-      sprint30m: 4.4,
-      standingLongJump: 228,
-      sideStep: 45,
-      pushUp: 44,
-      sitAndReach: 19,
-      powerDribble10m: 2.25,
-      passingAccuracy: 36,
-      blazePodReaction: 355,
-    },
   },
   DF: {
     u15: {
@@ -145,24 +123,39 @@ const benchmark: Benchmark = {
       passingAccuracy: 29,
       blazePodReaction: 400,
     },
-    adult: {
-      sprint10m: 1.87,
-      sprint30m: 4.48,
-      standingLongJump: 236,
-      sideStep: 43,
-      pushUp: 48,
-      sitAndReach: 17,
-      powerDribble10m: 2.35,
-      passingAccuracy: 32,
-      blazePodReaction: 370,
-    },
   },
 };
 
+const ageBands: AgeBand[] = ["u10", "u11", "u12", "u13", "u14", "u15", "u16", "u17", "u18"];
+
+const buildAgeBenchmarks = (u15: PlayerMetrics, u18: PlayerMetrics): Record<AgeBand, PlayerMetrics> => {
+  const generated = {} as Record<AgeBand, PlayerMetrics>;
+
+  ageBands.forEach((band) => {
+    const age = Number(band.slice(1));
+    const metrics = {} as PlayerMetrics;
+
+    (Object.keys(metricLabels) as MetricKey[]).forEach((key) => {
+      const yearlyDelta = (u18[key] - u15[key]) / 3;
+      const projected = u15[key] + yearlyDelta * (age - 15);
+      metrics[key] = Number(projected.toFixed(2));
+    });
+
+    generated[band] = metrics;
+  });
+
+  return generated;
+};
+
+const benchmark: Benchmark = {
+  FW: buildAgeBenchmarks(benchmarkAnchors.FW.u15, benchmarkAnchors.FW.u18),
+  MF: buildAgeBenchmarks(benchmarkAnchors.MF.u15, benchmarkAnchors.MF.u18),
+  DF: buildAgeBenchmarks(benchmarkAnchors.DF.u15, benchmarkAnchors.DF.u18),
+};
+
 const getAgeBand = (age: number): AgeBand => {
-  if (age <= 15) return "u15";
-  if (age <= 18) return "u18";
-  return "adult";
+  const clampedAge = Math.max(10, Math.min(18, Math.round(age)));
+  return `u${clampedAge}` as AgeBand;
 };
 
 const clampScore = (value: number) => Math.max(0, Math.min(100, value));
