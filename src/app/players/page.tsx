@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Users } from "lucide-react";
 import { listPlayers, PlayerRecord } from "../../lib/supabase";
 import { getGrade } from "../../lib/report";
 import { Card } from "@/components/ui/card";
+
+type ViewFilter = "ALL" | "WITH_GROWTH";
+
+const getBasePlayerId = (player: PlayerRecord): string => {
+  if (!player.note) return player.id;
+  const matched = player.note.match(/base_player_id:([^\s]+)/);
+  return matched?.[1] ?? player.id;
+};
 
 const positionColor: Record<string, string> = {
   FW: "bg-red-500",
@@ -26,6 +34,7 @@ export default function PlayersPage() {
   const [players, setPlayers] = useState<PlayerRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("ALL");
   const [positionFilter, setPositionFilter] = useState<"ALL" | "FW" | "MF" | "DF">("ALL");
   const [ageFilter, setAgeFilter] = useState<"ALL" | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18>("ALL");
 
@@ -46,10 +55,21 @@ export default function PlayersPage() {
     void loadPlayers();
   }, []);
 
+  const measurementCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const player of players) {
+      const baseId = getBasePlayerId(player);
+      counts.set(baseId, (counts.get(baseId) ?? 0) + 1);
+    }
+    return counts;
+  }, [players]);
+
   const filteredPlayers = players.filter((player) => {
     const positionMatched = positionFilter === "ALL" || player.position === positionFilter;
     const ageMatched = ageFilter === "ALL" || player.age === ageFilter;
-    return positionMatched && ageMatched;
+    const growthMatched =
+      viewFilter === "ALL" || (measurementCounts.get(getBasePlayerId(player)) ?? 0) >= 2;
+    return positionMatched && ageMatched && growthMatched;
   });
 
   return (
@@ -72,6 +92,32 @@ export default function PlayersPage() {
         {errorMessage ? (
           <Card className="border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
             {errorMessage}
+          </Card>
+        ) : null}
+
+        {!loading && !errorMessage ? (
+          <Card className="bg-white p-4">
+            <div className="flex rounded-lg bg-slate-100 p-1">
+              {(
+                [
+                  { value: "ALL", label: "전체" },
+                  { value: "WITH_GROWTH", label: "성장추이 있는 선수" },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setViewFilter(tab.value)}
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-bold transition-all ${
+                    viewFilter === tab.value
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </Card>
         ) : null}
 
